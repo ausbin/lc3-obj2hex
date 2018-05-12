@@ -12,7 +12,7 @@ help:
 	as2obj $<
 
 %.dat: %.obj
-	./obj2dat.py $<
+	./obj2hex.py $<
 
 clean:
 	rm -f *.obj *.dat *.sym
