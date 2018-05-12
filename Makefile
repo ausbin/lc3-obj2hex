@@ -4,15 +4,19 @@
 
 help:
 	@echo "This Makefile will assemble LC-3 assembly and format a"
-	@echo "Roigisim-friendly hexdump"
+	@echo "hexdump for Verilog or Roigisim"
 	@echo
-	@echo "To use it, run \`make X.dat' for some X.asm."
+	@echo "To use it, run \`make X.dat' or \`make X.list' for some X.asm."
+	@echo "This will generate hex for Roigisim or Verilog, respectively."
 
 %.obj: %.asm
 	as2obj $<
 
 %.dat: %.obj
-	./obj2hex.py $<
+	./obj2hex.py --roi $<
+
+%.list: %.obj
+	./obj2hex.py --verilog $<
 
 clean:
 	rm -f *.obj *.dat *.sym

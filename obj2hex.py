@@ -60,51 +60,31 @@ class ObjectFile:
         return self._segments
 
 
-class RoiHexdump:
+class Hexdump:
     """
-    Generate a Roigisim-friendly hexdump from a list of object file
-    segments. Supports JSON abbreviated format or the row/column format
-    supported by the load/save buttons in the edit ROM/RAM window.
+    Base class for generating ascii hexdumps from a list of object file
+    segments.
     """
 
-    def __init__(self, segments, word_size, full=False):
+    def __init__(self, segments, word_size, sep=' '):
         self.words = []
-        self.full = full
         self.word_size = word_size
+        self.sep = sep
 
         self.from_segments(segments)
 
     def __str__(self):
-        if self.full:
-            # Print a hexdump with rows and columns and stuff
-            cols = 8 * self.word_size
-            dump = ''
-            i = 0
-
-            while i < len(self.words):
-                row_size = min(cols, len(self.words))
-                dump += ' '.join(self.words[i:i + row_size])
-                dump += '\n'
-                i += row_size
-
-            return dump
-        else:
-            return ' '.join(self.words)
+        return self.sep.join(self.words)
 
     def pad(self, num_words):
         """
         Add num_words zero words at the end of the current wordlist.
         Useful for separating object file segments.
         """
-
-        if self.full:
-            self.words += ['00' * self.word_size] * num_words
-        else:
-            self.words.append('{}-{}'.format(num_words, '00' * self.word_size))
+        self.words += ['00' * self.word_size] * num_words
 
     def from_segments(self, segments):
         """Populate the wordlist using the object file segments provided."""
-
         current_addr = 0
 
         for segment in sorted(segments, key=lambda seg: seg.start):
@@ -125,6 +105,57 @@ class RoiHexdump:
         if num_addresses > current_addr:
             self.pad(num_addresses - current_addr)
 
+    @staticmethod
+    def file_extension():
+        """Conventional file extension of this hexdump format"""
+        return 'dat'
+
+
+class FancyHexdump(Hexdump):
+    """Print a hexdump with rows and columns and stuff."""
+
+    def __init__(self, segments, word_size):
+        super().__init__(segments, word_size)
+
+    def __str__(self):
+        cols = 8 * self.word_size
+        dump = ''
+        i = 0
+
+        while i < len(self.words):
+            row_size = min(cols, len(self.words))
+            dump += ' '.join(self.words[i:i + row_size])
+            dump += '\n'
+            i += row_size
+
+        return dump
+
+
+class RoiHexdump(Hexdump):
+    """
+    Generate a Roigisim-friendly hexdump from a list of object file
+    segments. Supports JSON abbreviated format or the row/column format
+    supported by the load/save buttons in the edit ROM/RAM window.
+    """
+
+    def __init__(self, segments, word_size):
+        super().__init__(segments, word_size, sep=' ')
+
+    def pad(self, num_words):
+        """This is a Roi hexdump, so use the abbreviated format"""
+
+        self.words.append('{}-{}'.format(num_words, '00' * self.word_size))
+
+
+class VerilogHexdump(Hexdump):
+    """Print verbosely, and one word per line"""
+
+    def __init__(self, segments, word_size):
+        super().__init__(segments, word_size, sep='\n')
+
+    @staticmethod
+    def file_extension():
+        return 'list'
 
 def main(argv):
     """
@@ -141,16 +172,30 @@ def main(argv):
                         help="Path to which to write generated hex file. `-' "
                              "means stdout. Default: X.dat for an objfile of "
                              "X.obj")
-    parser.add_argument('--full', '-f', action='store_true',
+    output = parser.add_mutually_exclusive_group(required=True)
+    output.add_argument('--fancy', '-f', action='store_true',
                         help="Generate full (gigantic) hexdump instead of "
                              "using Roi's JSON abbreviation syntax")
+    output.add_argument('--roi', '-r', action='store_true',
+                        help="Use Roi's JSON abbreviation syntax in the "
+                             "hexdump")
+    output.add_argument('--verilog', '-v', action='store_true',
+                        help="Generate verilog-style hexdump")
     args = parser.parse_args(argv[1:])
 
     with open(args.objfile, 'rb') as objfile:
         obj = ObjectFile(objfile)
 
-    hexdump = RoiHexdump(obj.segments(), word_size=obj.WORD_SIZE,
-                         full=args.full)
+    hexdump_args = [obj.segments(), obj.WORD_SIZE]
+    if args.fancy:
+        hexdump = FancyHexdump(*hexdump_args)
+    elif args.roi:
+        hexdump = RoiHexdump(*hexdump_args)
+    elif args.verilog:
+        hexdump = VerilogHexdump(*hexdump_args)
+    else:
+        raise NotImplementedError('you added a new output type without '
+                                  'calling it in main(), good job')
 
     if args.datfile == '-':
         sys.stdout.write(str(hexdump))
@@ -158,7 +203,8 @@ def main(argv):
         if args.datfile is not None:
             hexpath = args.datfile
         else:
-            hexpath = '{}.dat'.format(args.objfile.rsplit('.', maxsplit=1)[0])
+            hexpath = '{}.{}'.format(args.objfile.rsplit('.', maxsplit=1)[0],
+                                     hexdump.file_extension())
 
         with open(hexpath, 'w') as hexfile:
             hexfile.write(str(hexdump))
