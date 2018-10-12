@@ -18,5 +18,8 @@ help:
 %.list: %.obj
 	./obj2hex.py --verilog $<
 
+%.hex.asm: %.obj
+	./obj2hex.py --obfuscate $<
+
 clean:
-	rm -f *.obj *.dat *.sym
+	rm -f *.obj *.dat *.sym *.hex.asm

@@ -157,6 +157,26 @@ class VerilogHexdump(Hexdump):
     def file_extension():
         return 'list'
 
+
+class ObfuscatedAsmHexdump(Hexdump):
+    """Print verbosely, and one word per line"""
+
+    def __init__(self, segments, word_size):
+        super().__init__(segments, word_size, sep='\n')
+
+    @staticmethod
+    def file_extension():
+        return 'hex.asm'
+
+    def __str__(self):
+        """Put .fills before each line"""
+        return self.sep.join('.fill x' + word for word in self.words)
+
+    def pad(self, num_words):
+        """Don't pad."""
+        pass
+
+
 def main(argv):
     """
     Accept a path to an LC-3 object file on the command line and convert
@@ -181,6 +201,8 @@ def main(argv):
                              "hexdump")
     output.add_argument('--verilog', '-v', action='store_true',
                         help="Generate verilog-style hexdump")
+    output.add_argument('--obfuscate', '-O', action='store_true',
+                        help="Generate obfuscated assembly")
     args = parser.parse_args(argv[1:])
 
     with open(args.objfile, 'rb') as objfile:
@@ -193,6 +215,8 @@ def main(argv):
         hexdump = RoiHexdump(*hexdump_args)
     elif args.verilog:
         hexdump = VerilogHexdump(*hexdump_args)
+    elif args.obfuscate:
+        hexdump = ObfuscatedAsmHexdump(*hexdump_args)
     else:
         raise NotImplementedError('you added a new output type without '
                                   'calling it in main(), good job')
